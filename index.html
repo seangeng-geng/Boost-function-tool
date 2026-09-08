@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CCM CPM 2-Phase Boost — Loop Gain Bode Tool</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e;line-height:1.5}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:18px 28px;display:flex;align-items:center;gap:16px}
+.header h1{font-size:18px;font-weight:600}
+.header .sub{font-size:12px;opacity:.7;margin-top:2px}
+.container{display:flex;gap:20px;padding:20px;max-width:1700px;margin:0 auto}
+.panel{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.sidebar{width:330px;flex-shrink:0;max-height:calc(100vh - 80px);overflow-y:auto}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:#ccc;border-radius:2px}
+.sidebar h2{font-size:14px;color:#4472C4;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #4472C4}
+.sidebar h3{font-size:12px;color:#666;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.5px}
+.param-row{display:flex;align-items:center;margin-bottom:4px;gap:6px}
+.param-row label{width:180px;font-size:12px;color:#444;flex-shrink:0}
+.param-row input{flex:1;padding:5px 8px;border:1.5px solid #ddd;border-radius:5px;font-size:12px;font-family:'Consolas',monospace;min-width:0}
+.param-row input:focus{outline:none;border-color:#4472C4;box-shadow:0 0 0 2px rgba(68,114,196,.12)}
+.param-row .unit{font-size:11px;color:#999;width:32px;text-align:right;flex-shrink:0}
+.btn{width:100%;padding:10px;background:linear-gradient(135deg,#4472C4,#3560a8);color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin-top:12px;transition:transform .1s,box-shadow .2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(68,114,196,.3)}
+.derived-box{margin-top:14px;padding:10px;background:#f7f9fc;border-radius:7px;border:1px solid #e8ecf1;font-size:11.5px}
+.derived-box h3{margin-top:0;color:#4472C4;font-size:12px}
+.dr{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee;cursor:help;position:relative}
+.dr:last-child{border:none}
+.dr:hover{background:#eef2ff}
+.dr:hover .dl{color:#4472C4}
+.dr .dl{color:#666;transition:color .15s}.dr .dv{font-family:'Consolas',monospace;font-weight:600;color:#1a1a2e}
+.dr .dv.w{color:#e74c3c}
+/* Derived row formula tooltip */
+.dr-tip{display:none;position:fixed;z-index:9999;background:#1a1a2e;color:#e8ecf1;padding:8px 12px;border-radius:6px;font-family:'Consolas',monospace;font-size:11.5px;line-height:1.6;pointer-events:none;max-width:360px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.dr-tip .tip-name{color:#7eb8f7;font-weight:700;margin-bottom:2px}
+.dr-tip .tip-eq{color:#fff}
+.dr-tip .tip-sub{color:#a0aec0;font-size:10.5px}
+.dr-tip .tip-val{color:#68d391;font-weight:600;margin-top:2px}
+.main{flex:1;min-width:0}
+.charts{display:flex;flex-direction:column;gap:16px}
+.chart-box{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.chart-box h3{font-size:13px;color:#4472C4;margin-bottom:10px}
+.chart-wrap{position:relative;height:360px}
+.legend-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;justify-content:center}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:#666}
+.leg-d{width:20px;height:3px;border-radius:2px}
+.leg-d.dashed{background:repeating-linear-gradient(90deg,var(--c) 0,var(--c) 5px,transparent 5px,transparent 8px)}
+.leg-d.solid{background:var(--c)}
+
+/* Formula hover panel */
+.formula-panel{background:#fff;border-radius:10px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid #4472C4}
+.formula-panel h3{font-size:13px;color:#4472C4;margin-bottom:8px}
+.formula-panel .fp-freq{font-size:12px;color:#888;margin-bottom:8px}
+.formula-panel .fp-freq span{font-family:'Consolas',monospace;font-weight:700;color:#1a1a2e}
+.fp-transfer{font-family:'Consolas',monospace;font-size:11px;color:#555;padding:6px 0;border-bottom:1px dashed #ddd;margin-bottom:6px}
+.fp-row{display:flex;align-items:flex-start;padding:6px 0;border-bottom:1px solid #f0f0f0;transition:background .15s}
+.fp-row:hover{background:#f8f9ff}
+.fp-row:last-child{border:none}
+.fp-row.total{border-top:2px solid #4472C4;margin-top:4px;padding-top:8px;font-weight:700}
+.fp-color{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-right:8px;margin-top:5px}
+.fp-label{font-size:11px;color:#666;flex-shrink:0;font-weight:600}
+.fp-def{font-family:'Consolas',monospace;font-size:12px;font-weight:600;color:#1a1a2e}
+.fp-sub{font-family:'Consolas',monospace;font-size:10.5px;color:#888;margin-left:86px;margin-top:1px}
+.fp-num{font-family:'Consolas',monospace;font-size:10.5px;color:#555;margin-left:86px;margin-top:1px}
+.fp-val{font-family:'Consolas',monospace;font-size:10.5px;color:#4472C4;font-weight:600;margin-left:86px;margin-top:2px}
+.fp-mag{font-family:'Consolas',monospace;font-size:11px;font-weight:600;color:#1a1a2e}
+.fp-phase{font-family:'Consolas',monospace;font-size:11px;color:#888}
+
+@media(max-width:1000px){.container{flex-direction:column}.sidebar{width:100%;max-height:none}}
+</style>
+</head>
+<body>
+
+<!-- Derived row formula tooltip -->
+<div class="dr-tip" id="drTip"></div>
+
+<div class="header">
+  <div>
+    <h1>CCM CPM 2-Phase Boost — Loop Gain Bode Tool</h1>
+    <div class="sub">T(s) = Adc · (1+s/Z1)(1+s/Z2)(1−s/Z_RHP) · e^(−s·Tdly) / [(1+s/P10)(1+s/P11)(1+s/P2)(1+s/P3)]</div>
+  </div>
+</div>
+
+<div class="container">
+<div class="sidebar panel">
+
+<h2> Input Parameters</h2>
+
+<h3>Power Stage</h3>
+<div class="param-row"><label>Vin</label><input id="pVin" type="number" value="12" step="0.1"><span class="unit">V</span></div>
+<div class="param-row"><label>Vout</label><input id="pVout" type="number" value="55" step="0.1"><span class="unit">V</span></div>
+<div class="param-row"><label>L (per phase)</label><input id="pL" type="number" value="1.5e-5" step="1e-6"><span class="unit">H</span></div>
+<div class="param-row"><label>Rload (total)</label><input id="pR" type="number" value="12.5" step="0.1"><span class="unit">Ω</span></div>
+<div class="param-row"><label>Cload (total)</label><input id="pC" type="number" value="1e-4" step="1e-6"><span class="unit">F</span></div>
+<div class="param-row"><label>ESR of Cload</label><input id="pESR" type="number" value="0.5" step="0.01"><span class="unit">Ω</span></div>
+
+<h3>Switching &amp; Slope</h3>
+<div class="param-row"><label>Fs (switching freq)</label><input id="pFs" type="number" value="230000" step="1000"><span class="unit">Hz</span></div>
+<div class="param-row"><label>Ma (slope comp)</label><input id="pMa" type="number" value="5750000" step="10000"><span class="unit">A/s</span></div>
+<div class="param-row"><label>DCR</label><input id="pDCR" type="number" value="0.01" step="0.001"><span class="unit">Ω</span></div>
+<div class="param-row"><label>Aint (ramp sense amp)</label><input id="pAint" type="number" value="1" step="0.1"><span class="unit"></span></div>
+
+<h3>Error Amplifier</h3>
+<div class="param-row"><label>R0 (EA output R)</label><input id="pR0" type="number" value="2e9" step="1e8"><span class="unit">Ω</span></div>
+<div class="param-row"><label>gma (EA transcond.)</label><input id="pGma" type="number" value="3.05e-5" step="1e-6"><span class="unit">S</span></div>
+<div class="param-row"><label>Cc (EA comp cap)</label><input id="pCc" type="number" value="3.3e-8" step="1e-9"><span class="unit">F</span></div>
+<div class="param-row"><label>Rcc (EA comp R)</label><input id="pRcc" type="number" value="15000" step="100"><span class="unit">Ω</span></div>
+<div class="param-row"><label>Cc2 (EA HF filter)</label><input id="pCc2" type="number" value="1e-10" step="1e-11"><span class="unit">F</span></div>
+
+<h3>Delay</h3>
+<div class="param-row"><label>Tdly (延迟时间)</label><input id="pTdly" type="number" value="0" step="1e-9"><span class="unit">s</span></div>
+
+<h3>Feedback</h3>
+<div class="param-row"><label>Vfb (ref voltage)</label><input id="pVfb" type="number" value="1.8333" step="0.01"><span class="unit">V</span></div>
+
+<button class="btn" onclick="updateAll()">Update Bode Plot</button>
+
+<div class="derived-box" id="derivedBox">
+  <h3>Power Stage</h3>
+  <div id="psContent"></div>
+</div>
+
+<div class="derived-box" style="margin-top:10px">
+  <h3>Poles &amp; Zeros</h3>
+  <div id="pzContent"></div>
+</div>
+
+<div class="derived-box" style="margin-top:10px">
+  <h3>Loop Gain Summary</h3>
+  <div id="lgContent"></div>
+</div>
+
+</div>
+
+<div class="main">
+  <div class="charts">
+    <div class="chart-box">
+      <h3>Magnitude (Open-Loop Gain)</h3>
+      <div class="chart-wrap"><canvas id="magChart"></canvas></div>
+      <div class="legend-row" id="magLeg"></div>
+    </div>
+
+    <!-- Formula panel: shows on hover -->
+    <div class="formula-panel" id="formulaPanel">
+      <h3>Transfer Function at Cursor</h3>
+      <div class="fp-freq">Hover over the chart to see formula breakdown &nbsp;|&nbsp; f = <span id="fpFreq">—</span></div>
+      <div class="fp-transfer">T(s) = Adc · (1+s/Z1) · (1+s/Z2) · (1−s/Z_RHP) / [(1+s/P10)(1+s/P11)(1+s/P2)(1+s/P3)]</div>
+      <div id="formulaRows"></div>
+    </div>
+
+    <div class="chart-box">
+      <h3>Phase</h3>
+      <div class="chart-wrap"><canvas id="phChart"></canvas></div>
+      <div class="legend-row" id="phLeg"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function fmtE(v,d=3){if(v===0)return'0';const e=Math.floor(Math.log10(Math.abs(v)));const m=v/10**e;return m.toFixed(d)+'e'+e}
+function fmtEng(v){if(v===0)return'0';const p=['f','p','n','μ','m','','k','M','G','T'];const e=Math.floor(Math.log10(Math.abs(v)));const i=Math.min(Math.max(Math.floor((e+3)/3),0),p.length-1);return(v/10**((i-1)*3)).toFixed(3)+' '+p[i]}
+
+// ── Global state ──
+let _derived = null;
+let _bodeData = null;
+
+function compute(p){
+  const {Vin,Vout,L,R,C,ESR,Fs,Ma,DCR,Aint,R0,Gma,Cc,Rcc,Cc2,Vfb,Tdly}=p;
+  const Rs=DCR*Aint;
+  const D=(Vout-Vin)/Vout;
+  const Dp=1-D;
+  const Ts=1/Fs;
+  const Fm=1/(Ma*Ts);
+  const Fv=Dp*Dp*Ts/(2*L);
+  const VG=Fm*Fv*Vout/Dp;
+  const CG=2*Fm*Vout/(Dp*Dp*R);
+  const Gc0=2*Vout/Dp*Fm/(1+VG+CG);
+  const wc_rad=Dp/Math.sqrt(L*C)*Math.sqrt(1+VG+CG);
+  const wc=wc_rad/(2*Math.PI);
+  const qNum=1+VG+CG;
+  const qDen=1+R*C*Fm*Vout/L-VG;
+  let Qc=null,stable=true;
+  if(qDen<=0){stable=false;Qc=Infinity}
+  else{Qc=Dp*R*Math.sqrt(C/L)*Math.sqrt(qNum/qDen)}
+  let P10=null,P11=null;
+  if(stable&&Qc<0.5){
+    const disc=1/(Qc*Qc)-4;
+    const sqrtDisc=Math.sqrt(Math.max(0,disc));
+    const base=wc/(2*Math.PI);
+    P10=base*(1/Qc-sqrtDisc)/2;
+    P11=base*(1/Qc+sqrtDisc)/2;
+  } else if(stable){P10=wc;P11=wc;}
+  const Z1=1/(2*Math.PI*Rcc*Cc);
+  const Z2=1/(2*Math.PI*C*ESR);
+  const Z_RHP=R*Vin*Vin/(2*Math.PI*Vout*Vout*L);
+  const P2=1/(2*Math.PI*R0*Cc);
+  const P3=1/(2*Math.PI*Rcc*Cc2);
+  const Acm=Gc0/Rs;
+  const Aea=Gma*R0;
+  const Afb=Vfb/Vout;
+  const Adc=Acm*Aea*Afb;
+  const GBW=Adc*P10*P2/Z1;
+  const PM_rad=Math.PI-(Math.atan(GBW/P10)+Math.atan(GBW/P11)+Math.atan(GBW/P2)+Math.atan(GBW/P3)+Math.atan(GBW/Z_RHP)-Math.atan(GBW/Z1)-Math.atan(GBW/Z2));
+  const PM=PM_rad*180/Math.PI;
+  return {D,Dp,Ts,Fm,Fv,VG,CG,Gc0,wc_rad,wc,Qc,stable,P10,P11,Z1,Z2,Z_RHP,P2,P3,Rs,Acm,Aea,Afb,Adc,GBW,PM,Tdly,
+          _p:{Vin,Vout,L,R,C,ESR,Fs,Ma,DCR,Aint,R0,Gma,Cc,Rcc,Cc2,Vfb,Tdly}};
+}
+
+function bodeData(d,fStart,fEnd,n){
+  const {Adc,P10,P11,P2,P3,Z1,Z2,Z_RHP,Tdly}=d;
+  const data=[];
+  for(let i=0;i<n;i++){
+    const f=fStart*Math.pow(fEnd/fStart,i/(n-1));
+    const mag_dc=20*Math.log10(Math.abs(Adc));
+    const mag_z1=10*Math.log10(1+(f/Z1)**2);
+    const mag_z2=10*Math.log10(1+(f/Z2)**2);
+    const mag_rhp=10*Math.log10(1+(f/Z_RHP)**2);
+    const mag_p10=-10*Math.log10(1+(f/P10)**2);
+    const mag_p11=-10*Math.log10(1+(f/P11)**2);
+    const mag_p2=-10*Math.log10(1+(f/P2)**2);
+    const mag_p3=-10*Math.log10(1+(f/P3)**2);
+    const mag_dly=0; // |e^(-jωTdly)| = 1 → 0 dB always
+    const mag_total=mag_dc+mag_z1+mag_z2+mag_rhp+mag_p10+mag_p11+mag_p2+mag_p3+mag_dly;
+    const ph_z1=Math.atan(f/Z1)*180/Math.PI;
+    const ph_z2=Math.atan(f/Z2)*180/Math.PI;
+    const ph_rhp=-Math.atan(f/Z_RHP)*180/Math.PI;
+    const ph_p10=-Math.atan(f/P10)*180/Math.PI;
+    const ph_p11=-Math.atan(f/P11)*180/Math.PI;
+    const ph_p2=-Math.atan(f/P2)*180/Math.PI;
+    const ph_p3=-Math.atan(f/P3)*180/Math.PI;
+    const ph_dly=-360*f*Tdly; // ∠e^(-jωTdly) = -ωTdly rad = -360·f·Tdly deg
+    const ph_total=ph_z1+ph_z2+ph_rhp+ph_p10+ph_p11+ph_p2+ph_p3+ph_dly;
+    data.push({f,mag_dc,mag_z1,mag_z2,mag_rhp,mag_p10,mag_p11,mag_p2,mag_p3,mag_dly,mag_total,
+               ph_z1,ph_z2,ph_rhp,ph_p10,ph_p11,ph_p2,ph_p3,ph_dly,ph_total});
+  }
+  return data;
+}
+
+// ── Find closest data point to a given frequency ──
+function findNearest(data,f){
+  let lo=0,hi=data.length-1;
+  while(lo<hi-1){const mid=(lo+hi)>>1;if(data[mid].f<f)lo=mid;else hi=mid;}
+  return Math.abs(data[lo].f-f)<Math.abs(data[hi].f-f)?data[lo]:data[hi];
+}
+
+// ── Update formula panel ──
+function updateFormulaPanel(dp){
+  if(!dp)return;
+  const d=_derived;
+  if(!d)return;
+  const p=d._p;
+
+  document.getElementById('fpFreq').textContent=fmtEng(dp.f)+' Hz  (ω = '+fmtE(2*Math.PI*dp.f)+' rad/s)';
+
+  const fmtP=v=>{
+    const abs=Math.abs(v);
+    if(abs>=1e6)return(v/1e6).toFixed(1)+'M';
+    if(abs>=1e3)return(v/1e3).toFixed(1)+'k';
+    if(abs>=1)return v.toFixed(2);
+    if(abs>=1e-3)return(v*1e3).toFixed(1)+'m';
+    if(abs>=1e-6)return(v*1e6).toFixed(1)+'μ';
+    if(abs>=1e-9)return(v*1e9).toFixed(1)+'n';
+    if(abs>=1e-12)return(v*1e12).toFixed(1)+'p';
+    return v.toExponential(1);
+  };
+
+  const rows=[
+    {color:COL.dc,label:'Adc',
+     def:'Acm · Aea · Afb',
+     sub:'= (Gc0/Rs) · (gma·R0) · (Vfb/Vout)',
+     num:'= ('+d.Gc0.toFixed(2)+'/'+(p.DCR*p.Aint)+') · ('+fmtP(p.Gma)+'·'+fmtP(p.R0)+') · ('+p.Vfb.toFixed(3)+'/'+p.Vout+')',
+     val:'= '+d.Adc.toExponential(3)+'  ('+(20*Math.log10(d.Adc)).toFixed(1)+' dB)',
+     mag:dp.mag_dc,phase:0},
+    {color:COL.z1,label:'Z1 (EA zero)',
+     def:'Z1 = 1 / (2π · Rcc · Cc)',
+     sub:'= 1 / (2π × Rcc × Cc)',
+     num:'= 1 / (2π × '+fmtP(p.Rcc)+' × '+fmtP(p.Cc)+')',
+     val:'= '+fmtEng(d.Z1)+' Hz',
+     mag:dp.mag_z1,phase:dp.ph_z1},
+    {color:COL.z2,label:'Z2 (ESR zero)',
+     def:'Z2 = 1 / (2π · Cload · ESR)',
+     sub:'= 1 / (2π × C × ESR)',
+     num:'= 1 / (2π × '+fmtP(p.C)+' × '+fmtP(p.ESR)+')',
+     val:'= '+fmtEng(d.Z2)+' Hz',
+     mag:dp.mag_z2,phase:dp.ph_z2},
+    {color:COL.rhp,label:'Z_RHP',
+     def:'Z_RHP = R · Vin² / (2π · Vout² · L)',
+     sub:'= R·Vin² / (2π·Vout²·L)',
+     num:'= '+fmtP(p.R)+'·'+p.Vin+'² / (2π·'+p.Vout+'²·'+fmtP(p.L)+')',
+     val:'= '+fmtEng(d.Z_RHP)+' Hz  ⚠',
+     mag:dp.mag_rhp,phase:dp.ph_rhp},
+    {color:COL.p10,label:'P10 (pole 1)',
+     def:'P10 = ωc/(2π) · (1/Qc − √(1/Qc²−4)) / 2',
+     sub:'= (complex pole split, lower)',
+     num:'wc='+fmtEng(d.wc)+' Hz, Qc='+d.Qc.toFixed(4),
+     val:'= '+fmtEng(d.P10)+' Hz',
+     mag:dp.mag_p10,phase:dp.ph_p10},
+    {color:COL.p11,label:'P11 (pole 2)',
+     def:'P11 = ωc/(2π) · (1/Qc + √(1/Qc²−4)) / 2',
+     sub:'= (complex pole split, higher)',
+     num:'wc='+fmtEng(d.wc)+' Hz, Qc='+d.Qc.toFixed(4),
+     val:'= '+fmtEng(d.P11)+' Hz',
+     mag:dp.mag_p11,phase:dp.ph_p11},
+    {color:COL.p2,label:'P2 (EA pole)',
+     def:'P2 = 1 / (2π · R0 · Cc)',
+     sub:'= 1 / (2π × R0 × Cc)',
+     num:'= 1 / (2π × '+fmtP(p.R0)+' × '+fmtP(p.Cc)+')',
+     val:'= '+fmtE(d.P2)+' Hz',
+     mag:dp.mag_p2,phase:dp.ph_p2},
+    {color:COL.p3,label:'P3 (EA HF pole)',
+     def:'P3 = 1 / (2π · Rcc · Cc2)',
+     sub:'= 1 / (2π × Rcc × Cc2)',
+     num:'= 1 / (2π × '+fmtP(p.Rcc)+' × '+fmtP(p.Cc2)+')',
+     val:'= '+fmtEng(d.P3)+' Hz',
+     mag:dp.mag_p3,phase:dp.ph_p3},
+    {color:'#9B59B6',label:'e^(−s·Tdly)',
+     def:'Delay: |H| = 1,  ∠H = −360°·f·Tdly',
+     sub:'= e^(−j·2π·f·Tdly)',
+     num:'f = '+fmtEng(dp.f)+' Hz, Tdly = '+(p.Tdly>0?fmtP(p.Tdly)+' s':'0'),
+     val:'= 0 dB,  ∠ = '+dp.ph_dly.toFixed(1)+'°'+(p.Tdly>0?' ⚠':''),
+     mag:dp.mag_dly,phase:dp.ph_dly},
+  ];
+
+  let html='';
+  rows.forEach(r=>{
+    const magSign=r.mag>=0?'+':'';
+    const phSign=r.phase>=0?'+':'';
+    html+=`<div class="fp-row">
+      <div class="fp-color" style="background:${r.color}"></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span class="fp-label" style="width:80px">${r.label}</span>
+          <span class="fp-def">${r.def}</span>
+        </div>
+        <div class="fp-sub">${r.sub}</div>
+        <div class="fp-num">${r.num}</div>
+        <div class="fp-val">${r.val}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;margin-left:8px">
+        <span class="fp-mag" style="color:${r.color}">${magSign}${r.mag.toFixed(2)} dB</span>
+        <span class="fp-phase">${phSign}${r.phase.toFixed(1)}°</span>
+      </div>
+    </div>`;
+  });
+  html+=`<div class="fp-row total">
+    <div class="fp-color" style="background:${COL.total}"></div>
+    <div style="flex:1">
+      <span class="fp-label" style="width:80px;display:inline-block">TOTAL</span>
+      <span class="fp-def">T(jω) = Π(zi)/Π(pi) at f = ${fmtEng(dp.f)} Hz</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;margin-left:8px">
+      <span class="fp-mag" style="color:${COL.total};font-size:13px">${dp.mag_total>=0?'+':''}${dp.mag_total.toFixed(2)} dB</span>
+      <span class="fp-phase" style="font-weight:700">${dp.ph_total>=0?'+':''}${dp.ph_total.toFixed(1)}°</span>
+    </div>
+  </div>`;
+  document.getElementById('formulaRows').innerHTML=html;
+}
+
+const COL={dc:'#4472C4',z1:'#70AD47',z2:'#FFC000',rhp:'#ED7D31',p10:'#A5A5A5',p11:'#7F7F7F',p2:'#5B9BD5',p3:'#9966FF',total:'#FF0000'};
+
+let magC=null,phC=null;
+
+// ── External tooltip → formula panel ──
+function makeExternalHandler(chartType){
+  return function(context){
+    const tooltip=context.tooltip;
+    if(tooltip.opacity===0||!tooltip.dataPoints||tooltip.dataPoints.length===0){return;}
+    const f=tooltip.dataPoints[0].parsed.x;
+    const dp=findNearest(_bodeData,f);
+    updateFormulaPanel(dp);
+  };
+}
+
+function buildCharts(data){
+  const mkDS=(key,label,color,dashed)=>({label,data:data.map(d=>({x:d.f,y:d[key]})),borderColor:color,borderWidth:dashed?1.2:2.5,borderDash:dashed?[5,3]:[],pointRadius:0,tension:.05,fill:false});
+  const xAxis={type:'logarithmic',title:{display:true,text:'Frequency (Hz)',font:{size:12}},min:.1,max:1e7,ticks:{callback:v=>{const e=Math.round(Math.log10(v));return'10^'+e},maxTicksLimit:10},grid:{color:'rgba(0,0,0,.05)'}};
+
+  const extTooltip=makeExternalHandler('mag');
+
+  if(magC)magC.destroy();
+  magC=new Chart(document.getElementById('magChart'),{type:'line',data:{datasets:[
+    mkDS('mag_dc','DC Gain (Adc)',COL.dc,false),
+    mkDS('mag_z1','EA Zero Z1',COL.z1,true),
+    mkDS('mag_z2','ESR Zero Z2',COL.z2,true),
+    mkDS('mag_rhp','RHP Zero',COL.rhp,true),
+    mkDS('mag_p10','Pole P10',COL.p10,true),
+    mkDS('mag_p11','Pole P11',COL.p11,true),
+    mkDS('mag_p2','EA Pole P2',COL.p2,true),
+    mkDS('mag_p3','EA Pole P3',COL.p3,true),
+    {label:'Delay e^(−s·Tdly)',data:data.map(d=>({x:d.f,y:d.mag_dly})),borderColor:'#9B59B6',borderWidth:1.2,borderDash:[3,3],pointRadius:0,tension:.05,fill:false},
+    mkDS('mag_total','TOTAL Loop Gain',COL.total,false)
+  ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},
+      tooltip:{enabled:true,
+        callbacks:{title:c=>'f = '+fmtEng(c[0].raw.x)+' Hz',label:c=>c.dataset.label+': '+c.raw.y.toFixed(2)+' dB'},
+        external:extTooltip
+      }
+    },scales:{x:xAxis,y:{title:{display:true,text:'Magnitude (dB)',font:{size:12}},grid:{color:'rgba(0,0,0,.05)'}}}}});
+
+  // Phase unwrap
+  let cum=0,prev=data[0].ph_total;
+  data[0].ph_uw=prev;
+  for(let i=1;i<data.length;i++){let df=data[i].ph_total-prev;while(df>180)df-=360;while(df<-180)df+=360;cum+=df;data[i].ph_uw=data[0].ph_total+cum;prev=data[i].ph_total}
+
+  if(phC)phC.destroy();
+  phC=new Chart(document.getElementById('phChart'),{type:'line',data:{datasets:[
+    {label:'EA Zero Z1',data:data.map(d=>({x:d.f,y:d.ph_z1})),borderColor:COL.z1,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'ESR Zero Z2',data:data.map(d=>({x:d.f,y:d.ph_z2})),borderColor:COL.z2,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'RHP Zero',data:data.map(d=>({x:d.f,y:d.ph_rhp})),borderColor:COL.rhp,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'Pole P10',data:data.map(d=>({x:d.f,y:d.ph_p10})),borderColor:COL.p10,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'Pole P11',data:data.map(d=>({x:d.f,y:d.ph_p11})),borderColor:COL.p11,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'EA Pole P2',data:data.map(d=>({x:d.f,y:d.ph_p2})),borderColor:COL.p2,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'EA Pole P3',data:data.map(d=>({x:d.f,y:d.ph_p3})),borderColor:COL.p3,borderWidth:1.2,borderDash:[5,3],pointRadius:0,tension:.05,fill:false},
+    {label:'Delay e^(−s·Tdly)',data:data.map(d=>({x:d.f,y:d.ph_dly})),borderColor:'#9B59B6',borderWidth:1.5,borderDash:[4,3],pointRadius:0,tension:.05,fill:false},
+    {label:'TOTAL Phase',data:data.map(d=>({x:d.f,y:d.ph_uw})),borderColor:COL.total,borderWidth:2.5,pointRadius:0,tension:.05,fill:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:250},interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},
+      tooltip:{enabled:true,
+        callbacks:{title:c=>'f = '+fmtEng(c[0].raw.x)+' Hz',label:c=>c.dataset.label+': '+c.raw.y.toFixed(1)+'°'},
+        external:extTooltip
+      }
+    },scales:{x:{...xAxis},y:{title:{display:true,text:'Phase (degrees)',font:{size:12}},grid:{color:'rgba(0,0,0,.05)'}}}}});
+
+  const mLeg=[['DC Gain','dc',false],['EA Zero Z1','z1',true],['ESR Zero Z2','z2',true],['RHP Zero','rhp',true],['Pole P10','p10',true],['Pole P11','p11',true],['EA Pole P2','p2',true],['EA Pole P3','p3',true],['Delay','#9B59B6',true],['TOTAL','total',false]];
+  const pLeg=[['EA Zero Z1','z1',true],['ESR Zero Z2','z2',true],['RHP Zero','rhp',true],['Pole P10','p10',true],['Pole P11','p11',true],['EA Pole P2','p2',true],['EA Pole P3','p3',true],['Delay','#9B59B6',true],['TOTAL','total',false]];
+  ['magLeg','phLeg'].forEach((id,idx)=>{
+    const items=idx===0?mLeg:pLeg;
+    document.getElementById(id).innerHTML=items.map(([n,k,d])=>`<div class="leg"><div class="leg-d ${d?'dashed':'solid'}" style="--c:${k.startsWith('#')?k:COL[k]}"></div>${n}</div>`).join('');
+  });
+}
+
+function dr(name,val,cls,formula,sub){
+  const fAttr=formula?` data-formula="${formula}"` :'';
+  const sAttr=sub?` data-sub="${sub}"`:'';
+  return `<div class="dr"${fAttr}${sAttr}><span class="dl">${name}</span><span class="dv ${cls||''}">${val}</span></div>`;
+}
+
+function updateDerived(d){
+  const p=d._p;
+  const fp=v=>{const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(1)+'M';if(a>=1e3)return(v/1e3).toFixed(1)+'k';if(a>=1)return v.toFixed(2);if(a>=1e-3)return(v*1e3).toFixed(1)+'m';if(a>=1e-6)return(v*1e6).toFixed(1)+'μ';if(a>=1e-9)return(v*1e9).toFixed(1)+'n';if(a>=1e-12)return(v*1e12).toFixed(1)+'p';return v.toExponential(1)};
+
+  // Power Stage
+  let html = '';
+  html += dr("D (duty)", d.D.toFixed(4), "", "D = (Vout-Vin)/Vout", `(${p.Vout}-${p.Vin})/${p.Vout} = ${d.D.toFixed(4)}`);
+  html += dr("D' (off-time)", d.Dp.toFixed(4), "", "D' = Vin/Vout", `${p.Vin}/${p.Vout} = ${d.Dp.toFixed(4)}`);
+  html += dr("Ts", fmtE(d.Ts)+" s", "", "Ts = 1/Fs", `1/${fp(p.Fs)} = ${fmtE(d.Ts)} s`);
+  html += dr("Rsense", d.Rs+" Ω", "", "Rs = DCR × Aint", `${p.DCR} × ${p.Aint} = ${d.Rs} Ω`);
+  html += dr("Fm", fmtE(d.Fm), "", "Fm = 1/(Ma×Ts)", `1/(${fp(p.Ma)} × ${fmtE(d.Ts)}) = ${fmtE(d.Fm)}`);
+  html += dr("Fv", fmtE(d.Fv), "", "Fv = D'^2×Ts/(2L)", `${d.Dp.toFixed(3)}^2 × ${fmtE(d.Ts)}/(2×${fp(p.L)}) = ${fmtE(d.Fv)}`);
+  html += dr("Voltage Loop Gain (VG)", d.VG.toFixed(4), "", "VG = Fm·Fv·Vout/D'", `${fmtE(d.Fm)}·${fmtE(d.Fv)}·${p.Vout}/${d.Dp.toFixed(3)} = ${d.VG.toFixed(4)}`);
+  html += dr("Current Loop Gain (CG)", d.CG.toFixed(4), "", "CG = 2·Fm·Vout/(D'^2·R)", `2·${fmtE(d.Fm)}·${p.Vout}/(${d.Dp.toFixed(3)}^2·${p.R}) = ${d.CG.toFixed(4)}`);
+  html += dr("Gc0", d.Gc0.toFixed(4)+" Ω", "", "Gc0 = 2·Vout/D'·Fm/(1+VG+CG)", `2·${p.Vout}/${d.Dp.toFixed(3)}·${fmtE(d.Fm)}/(1+${d.VG.toFixed(3)}+${d.CG.toFixed(3)}) = ${d.Gc0.toFixed(4)} Ω`);
+  html += dr("ωc", fmtEng(d.wc)+" Hz", "", "ωc = D'/√(LC)·√(1+VG+CG)", `${d.Dp.toFixed(3)}/√(${fp(p.L)}·${fp(p.C)})·√(1+${d.VG.toFixed(3)}+${d.CG.toFixed(3)}) = ${fmtEng(d.wc)} Hz`);
+  html += dr("Qc", d.stable?d.Qc.toFixed(4):"UNSTABLE", d.stable?"":"w", "Qc = D'·R·√(C/L)·√(num/den)", `stable: ${d.stable?"yes":"no"}`);
+  document.getElementById('psContent').innerHTML = html;
+
+  // Poles & Zeros
+  html = '';
+  html += dr("P10 (output pole 1)", fmtEng(d.P10)+" Hz", "", "P10 = ωc/(2π)·(1/Qc-√(1/Qc^2-4))/2", `pole split (lower), wc=${fmtEng(d.wc)}, Qc=${d.Qc.toFixed(4)} → ${fmtEng(d.P10)} Hz`);
+  html += dr("P11 (output pole 2)", fmtEng(d.P11)+" Hz", "", "P11 = ωc/(2π)·(1/Qc+√(1/Qc^2-4))/2", `pole split (higher), wc=${fmtEng(d.wc)}, Qc=${d.Qc.toFixed(4)} → ${fmtEng(d.P11)} Hz`);
+  html += dr("P2 (EA pole)", fmtE(d.P2)+" Hz", "", "P2 = 1/(2π·R0·Cc)", `1/(2π·${fp(p.R0)}·${fp(p.Cc)}) = ${fmtE(d.P2)} Hz`);
+  html += dr("P3 (EA HF pole)", fmtEng(d.P3)+" Hz", "", "P3 = 1/(2π·Rcc·Cc2)", `1/(2π·${fp(p.Rcc)}·${fp(p.Cc2)}) = ${fmtEng(d.P3)} Hz`);
+  html += dr("Z1 (EA zero)", fmtEng(d.Z1)+" Hz", "", "Z1 = 1/(2π·Rcc·Cc)", `1/(2π·${fp(p.Rcc)}·${fp(p.Cc)}) = ${fmtEng(d.Z1)} Hz`);
+  html += dr("Z2 (ESR zero)", fmtEng(d.Z2)+" Hz", "", "Z2 = 1/(2π·Cload·ESR)", `1/(2π·${fp(p.C)}·${fp(p.ESR)}) = ${fmtEng(d.Z2)} Hz`);
+  html += dr("Z_RHP", fmtEng(d.Z_RHP)+" Hz", "", "Z_RHP = R·Vin^2/(2π·Vout^2·L)", `${p.R}·${p.Vin}^2/(2π·${p.Vout}^2·${fp(p.L)}) = ${fmtEng(d.Z_RHP)} Hz`);
+  document.getElementById('pzContent').innerHTML = html;
+
+  // Loop Gain Summary
+  html = '';
+  html += dr("Acm = Gc0/Rs", d.Acm.toFixed(2)+" ("+(20*Math.log10(d.Acm)).toFixed(1)+" dB)", "", "Acm = Gc0/Rs", `${d.Gc0.toFixed(2)}/${p.DCR*p.Aint} = ${d.Acm.toFixed(2)}`);
+  html += dr("Aea = gma×R0", fmtE(d.Aea)+" ("+(20*Math.log10(d.Aea)).toFixed(1)+" dB)", "", "Aea = gma × R0", `${fp(p.Gma)} × ${fp(p.R0)} = ${fmtE(d.Aea)}`);
+  html += dr("Afb = Vfb/Vout", d.Afb.toFixed(4)+" ("+(20*Math.log10(d.Afb)).toFixed(1)+" dB)", "", "Afb = Vfb/Vout", `${p.Vfb.toFixed(3)}/${p.Vout} = ${d.Afb.toFixed(4)}`);
+  html += dr("Adc (DC loop gain)", fmtE(d.Adc)+" ("+(20*Math.log10(d.Adc)).toFixed(1)+" dB)", "", "Adc = Acm×Aea×Afb", `${d.Acm.toFixed(1)} × ${fmtE(d.Aea)} × ${d.Afb.toFixed(4)} = ${fmtE(d.Adc)}`);
+  html += dr("GBW", fmtEng(d.GBW)+" Hz", "", "GBW = Adc×P10×P2/Z1", `${fmtE(d.Adc)}·${fmtEng(d.P10)}·${fmtE(d.P2)}/${fmtEng(d.Z1)} = ${fmtEng(d.GBW)} Hz`);
+  html += dr("GBW/P10", (d.GBW/d.P10).toFixed(2), "", "GBW/P10", `${fmtEng(d.GBW)}/${fmtEng(d.P10)} = ${(d.GBW/d.P10).toFixed(2)}`);
+  html += dr("GBW/P2", fmtE(d.GBW/d.P2), "", "GBW/P2", `${fmtEng(d.GBW)}/${fmtE(d.P2)} = ${fmtE(d.GBW/d.P2)}`);
+  html += dr("GBW/Z1", (d.GBW/d.Z1).toFixed(2), "", "GBW/Z1", `${fmtEng(d.GBW)}/${fmtEng(d.Z1)} = ${(d.GBW/d.Z1).toFixed(2)}`);
+  html += dr("GBW/Z2", (d.GBW/d.Z2).toFixed(4), "", "GBW/Z2", `${fmtEng(d.GBW)}/${fmtEng(d.Z2)} = ${(d.GBW/d.Z2).toFixed(4)}`);
+  html += dr("GBW/Z_RHP", (d.GBW/d.Z_RHP).toFixed(4), "", "GBW/Z_RHP", `${fmtEng(d.GBW)}/${fmtEng(d.Z_RHP)} = ${(d.GBW/d.Z_RHP).toFixed(4)}`);
+  html += dr("GBW/P3", (d.GBW/d.P3).toFixed(4), "", "GBW/P3", `${fmtEng(d.GBW)}/${fmtEng(d.P3)} = ${(d.GBW/d.P3).toFixed(4)}`);
+  const pmColor = d.PM>45?"#27ae60":d.PM>30?"#e67e22":"#e74c3c";
+  html += `<div class="dr" style="border-top:2px solid #4472C4;padding-top:4px;margin-top:4px"><span class="dl" style="font-weight:700;color:#4472C4">PM (Phase Margin)</span><span class="dv" style="font-size:14px;color:${pmColor}">${d.PM.toFixed(1)}°</span></div>`;
+  document.getElementById('lgContent').innerHTML = html;
+
+  attachDrTips();
+}
+
+// ── Derived-row tooltip ──
+function attachDrTips(){
+  const tip=document.getElementById('drTip');
+  document.querySelectorAll('.dr[data-formula]').forEach(el=>{
+    el.onmouseenter=e=>{
+      const name=el.querySelector('.dl').textContent;
+      const eq=el.dataset.formula;
+      const sub=el.dataset.sub||'';
+      tip.innerHTML=`<div class="tip-name">${name}</div><div class="tip-eq">${eq}</div>${sub?`<div class="tip-sub">${sub}</div>`:''}`;
+      tip.style.display='block';
+    };
+    el.onmousemove=e=>{
+      tip.style.left=(e.clientX+14)+'px';
+      tip.style.top=(e.clientY-10)+'px';
+    };
+    el.onmouseleave=()=>{tip.style.display='none'};
+  });
+}
+
+function getParams(){
+  return {
+    Vin:+document.getElementById('pVin').value,
+    Vout:+document.getElementById('pVout').value,
+    L:+document.getElementById('pL').value,
+    R:+document.getElementById('pR').value,
+    C:+document.getElementById('pC').value,
+    ESR:+document.getElementById('pESR').value,
+    Fs:+document.getElementById('pFs').value,
+    Ma:+document.getElementById('pMa').value,
+    DCR:+document.getElementById('pDCR').value,
+    Aint:+document.getElementById('pAint').value,
+    R0:+document.getElementById('pR0').value,
+    Gma:+document.getElementById('pGma').value,
+    Cc:+document.getElementById('pCc').value,
+    Rcc:+document.getElementById('pRcc').value,
+    Cc2:+document.getElementById('pCc2').value,
+    Vfb:+document.getElementById('pVfb').value,
+    Tdly:+document.getElementById('pTdly').value
+  };
+}
+
+function updateAll(){
+  const p=getParams();
+  _derived=compute(p);
+  _bodeData=bodeData(_derived,0.1,1e7,1000);
+  updateDerived(_derived);
+  buildCharts(_bodeData);
+  updateFormulaPanel(_bodeData[Math.floor(_bodeData.length/2)]);
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  updateAll();
+  document.querySelectorAll('.param-row input').forEach(el=>{
+    el.addEventListener('input',updateAll);
+  });
+});
+</script>
+</body>
+</html>
